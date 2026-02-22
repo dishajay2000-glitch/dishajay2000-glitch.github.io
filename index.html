@@ -96,6 +96,29 @@
       font-weight: 600;
     }
 
+    .text-input {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+      outline: none;
+    }
+    .text-input::placeholder { color: rgba(207,199,232,0.75); }
+    .text-input:focus {
+      border-color: rgba(180,140,255,0.55);
+      box-shadow: 0 0 0 2px rgba(180,140,255,0.12);
+    }
+    .question-help {
+      margin-top: 6px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
     .segmented {
       display: flex;
       gap: 8px;
@@ -407,6 +430,34 @@
         </div>
       </div>
 
+      <div class="row two">
+        <div class="group">
+          <label class="head">Reading Focus</label>
+          <div class="segmented" id="focusButtons">
+            <button data-focus="general" class="active" type="button">General</button>
+            <button data-focus="love" type="button">Love</button>
+            <button data-focus="career" type="button">Career</button>
+          </div>
+        </div>
+        <div class="group">
+          <label class="head">Summary Tone</label>
+          <div class="segmented" id="toneButtons">
+            <button data-tone="gentle" class="active" type="button">Gentle</button>
+            <button data-tone="spiritual" type="button">Spiritual</button>
+            <button data-tone="practical" type="button">Practical</button>
+            <button data-tone="direct" type="button">Direct</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="group">
+          <label class="head" for="questionInput">Your Question (optional)</label>
+          <input id="questionInput" class="text-input" type="text" maxlength="220" placeholder="e.g., Will this relationship improve? / Should I switch jobs?" />
+          <div class="question-help">The summary will reference your exact question and interpret the cards in that context.</div>
+        </div>
+      </div>
+
       <div class="row actions">
         <button class="btn primary" id="newReadingBtn" type="button" title="Shuffles the full 78-card deck and starts a new reading">🔀 Shuffle Deck & Start Reading</button>
         <button class="btn" id="drawNextBtn" type="button">🃏 Draw Next Card</button>
@@ -539,11 +590,17 @@
       selectedCards: [],
       revealedCount: 0,
       readingActive: false,
-      shuffleState: 'idle' // idle | shuffling | done
+      shuffleState: 'idle', // idle | shuffling | done
+      readingFocus: 'general', // general | love | career
+      summaryTone: 'gentle', // spiritual | practical | direct | gentle
+      questionText: ''
     };
 
     const spreadButtons = document.getElementById('spreadButtons');
     const modeButtons = document.getElementById('modeButtons');
+    const focusButtons = document.getElementById('focusButtons');
+    const toneButtons = document.getElementById('toneButtons');
+    const questionInput = document.getElementById('questionInput');
     const newReadingBtn = document.getElementById('newReadingBtn');
     const drawNextBtn = document.getElementById('drawNextBtn');
     const revealAllBtn = document.getElementById('revealAllBtn');
@@ -667,38 +724,265 @@
       return appState.selectedCards.slice(0, appState.revealedCount);
     }
 
+    function getFocusProfile() {
+      switch (appState.readingFocus) {
+        case 'love':
+          return {
+            label: 'love',
+            opening: 'Viewed through a love lens, this reading speaks to connection, emotional honesty, and relational dynamics.',
+            oneCardPrompt: 'Apply this message to your relationships, attraction patterns, or emotional boundaries.',
+            closing3: 'Read this as movement in relationship energy across time: what shaped the connection, what is happening now, and where it may be heading.',
+            closing5: 'Read this as a relationship map: the emotional climate, what may be creating friction, the guidance available, the next loving action, and the likely direction.'
+          };
+        case 'career':
+          return {
+            label: 'career',
+            opening: 'Viewed through a career lens, this reading focuses on work direction, decisions, momentum, and practical progress.',
+            oneCardPrompt: 'Apply this message to your job, projects, leadership, learning path, or next professional step.',
+            closing3: 'Read this as a career timeline: what shaped your current path, what is active now, and what direction your efforts are likely creating.',
+            closing5: 'Read this as a work strategy map: the core situation, the obstacle, the guidance, the action to prioritize, and the likely result.'
+          };
+        default:
+          return {
+            label: 'general',
+            opening: 'This reading offers general guidance for your current energy, priorities, and direction.',
+            oneCardPrompt: 'Apply this message to the area of life that feels most active right now.',
+            closing3: 'Read this as a general progression from past influences into present energy and a likely near-future direction.',
+            closing5: 'Read this as a broader life snapshot showing the core theme, challenge, guidance, action, and likely outcome.'
+          };
+      }
+    }
+
+    function tonePick(options) {
+      return options[appState.summaryTone] || options.gentle || Object.values(options)[0] || '';
+    }
+
+    function toneIntroPrefix() {
+      return tonePick({
+        gentle: 'A soft reading message:',
+        spiritual: 'A spiritual reading message:',
+        practical: 'A practical reading message:',
+        direct: 'Direct read:'
+      });
+    }
+
+    function cleanedQuestionText() {
+      return String(appState.questionText || '').trim();
+    }
+
+    function quotedQuestionText() {
+      const q = cleanedQuestionText();
+      if (!q) return '';
+      const normalized = /[?.!]$/.test(q) ? q : `${q}?`;
+      return `“${normalized}”`;
+    }
+
+    function buildExactQuestionLine() {
+      const q = quotedQuestionText();
+      if (!q) return '';
+
+      return tonePick({
+        gentle: `Your question is ${q} The cards are being read with care around this exact concern.`,
+        spiritual: `You asked ${q} Let this question be the intention that guides the reading.`,
+        practical: `Question in focus: ${q} The interpretation below is tied directly to this question.`,
+        direct: `Question: ${q}`
+      });
+    }
+
+    function toneVerbForPosition(label) {
+      const maps = {
+        gentle: {
+          Past: 'suggests', Present: 'shows', Future: 'points toward', Theme: 'sets the tone with',
+          Challenge: 'indicates', Guidance: 'encourages', Action: 'advises', Outcome: 'points to', Default: 'suggests'
+        },
+        spiritual: {
+          Past: 'reveals', Present: 'illuminates', Future: 'foreshadows', Theme: 'anchors the reading with',
+          Challenge: 'reveals', Guidance: 'invites', Action: 'calls for', Outcome: 'foreshadows', Default: 'reveals'
+        },
+        practical: {
+          Past: 'reflects', Present: 'highlights', Future: 'indicates', Theme: 'defines the situation through',
+          Challenge: 'highlights', Guidance: 'recommends', Action: 'asks for', Outcome: 'indicates', Default: 'highlights'
+        },
+        direct: {
+          Past: 'shows', Present: 'shows', Future: 'signals', Theme: 'means',
+          Challenge: 'shows', Guidance: 'says', Action: 'calls for', Outcome: 'signals', Default: 'shows'
+        }
+      };
+      const toneMap = maps[appState.summaryTone] || maps.gentle;
+      return toneMap[label] || toneMap.Default;
+    }
+
+    function buildQuestionAwareLine(cards) {
+      const focus = getFocusProfile();
+      if (!cards.length) return focus.opening;
+
+      const arcanaCounts = cards.reduce((acc, c) => {
+        acc[c.arcana] = (acc[c.arcana] || 0) + 1;
+        return acc;
+      }, {});
+      const dominantArcana = Object.entries(arcanaCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+      let nuance = '';
+      if (appState.readingFocus === 'love') {
+        if (dominantArcana === 'Cups') nuance = ' The Cups emphasis highlights emotional reciprocity, sensitivity, and heart-centered truth.';
+        else if (dominantArcana === 'Swords') nuance = ' The Swords emphasis points to communication, clarity, and mental patterns in the connection.';
+        else if (dominantArcana === 'Wands') nuance = ' The Wands emphasis points to passion, attraction, and the pace of the relationship dynamic.';
+        else if (dominantArcana === 'Pentacles') nuance = ' The Pentacles emphasis highlights consistency, effort, and long-term stability in relationships.';
+      } else if (appState.readingFocus === 'career') {
+        if (dominantArcana === 'Pentacles') nuance = ' The Pentacles emphasis strongly supports skill-building, stability, and material progress.';
+        else if (dominantArcana === 'Wands') nuance = ' The Wands emphasis favors initiative, visibility, and momentum in your work life.';
+        else if (dominantArcana === 'Swords') nuance = ' The Swords emphasis points to decisions, planning, communication, and strategy.';
+        else if (dominantArcana === 'Cups') nuance = ' The Cups emphasis reminds you to include fulfillment, alignment, and people dynamics in career choices.';
+      } else {
+        if (dominantArcana === 'Major') nuance = ' The Major Arcana presence suggests bigger life lessons or turning points are active.';
+      }
+
+      return `${focus.opening}${nuance}`;
+    }
+
     function summarizeReading(cards) {
       if (!cards.length) {
         return 'Your summary will appear here after you reveal card(s).';
       }
 
-      if (cards.length === 1) {
-        const c = cards[0];
-        return `${c.name} suggests a focus on ${extractKeywords(c.meaning)}. Today’s energy invites you to move with awareness and intention.`;
+      const spreadSize = appState.spreadSize;
+
+      // Position-aware summaries for 3-card and 5-card spreads
+      if (spreadSize === 3 || spreadSize === 5) {
+        return summarizePositionAwareSpread(cards, spreadSize);
       }
 
+      // 1-card reading summary
+      if (cards.length === 1) {
+        const c = cards[0];
+        return `${toneIntroPrefix()} ${buildExactQuestionLine()} ${buildQuestionAwareLine([c])} ${c.name} suggests a focus on ${extractKeywords(c.meaning)}. ${oneCardGuidanceLine(c)}`;
+      }
+
+      // Generic fallback (not expected in normal UI flow)
       const arcanaCounts = cards.reduce((acc, c) => {
         acc[c.arcana] = (acc[c.arcana] || 0) + 1;
         return acc;
       }, {});
 
       const dominantArcana = Object.entries(arcanaCounts)
-        .sort((a,b) => b[1]-a[1])[0]?.[0];
-
-      const themes = cards.map(c => extractKeywords(c.meaning)).join('; ');
-
-      let framing = '';
-      if (cards.length === 3) {
-        framing = 'This spread reads like a progression: what shaped the situation, what is active now, and where things may move next.';
-      } else if (cards.length === 5) {
-        framing = 'This spread gives a broader snapshot of the situation, including challenge, support, and a likely direction if current energy continues.';
-      }
+        .sort((a, b) => b[1] - a[1])[0]?.[0];
 
       const arcanaLine = dominantArcana
         ? `A strong ${dominantArcana} tone appears in this reading, highlighting ${arcanaInterpretation(dominantArcana)}.`
         : '';
 
-      return `${framing} ${arcanaLine} Combined message: ${combineCardNarrative(cards)} Key themes across the cards include ${themes}.`;
+      const themes = cards.map(c => extractKeywords(c.meaning)).join('; ');
+      return `${arcanaLine} Combined message: ${combineCardNarrative(cards)} Key themes across the cards include ${themes}.`;
+    }
+
+    function summarizePositionAwareSpread(cards, spreadSize) {
+      const labels = spreadPositionLabels[spreadSize] || [];
+      const revealedCount = cards.length;
+      const total = spreadSize;
+      const sentences = cards.map((card, idx) => positionSentence(labels[idx] || `Card ${idx + 1}`, card));
+      const toneLine = buildArcanaToneLine(cards);
+      const themeLine = cards.length > 1
+        ? `Across the revealed cards, recurring themes include ${cards.map(c => extractKeywords(c.meaning)).join('; ')}.`
+        : '';
+      const focusLine = buildQuestionAwareLine(cards);
+      const introLine = toneIntroPrefix();
+      const exactQuestionLine = buildExactQuestionLine();
+
+      if (revealedCount < total) {
+        const hiddenLabels = labels.slice(revealedCount);
+        const pendingText = hiddenLabels.length
+          ? `Still hidden: ${hiddenLabels.join(', ')}. Reveal the remaining card${hiddenLabels.length > 1 ? 's' : ''} for the full position-based reading.`
+          : 'Reveal the remaining cards for the full reading.';
+
+        return [introLine, exactQuestionLine, `You have revealed ${revealedCount} of ${total} cards.`, focusLine, ...sentences, toneLine, themeLine, pendingText]
+          .filter(Boolean)
+          .join(' ');
+      }
+
+      const focus = getFocusProfile();
+      if (spreadSize === 3) {
+        return [introLine, exactQuestionLine, focusLine, ...sentences, toneLine, themeLine, focus.closing3]
+          .filter(Boolean)
+          .join(' ');
+      }
+
+      if (spreadSize === 5) {
+        return [introLine, exactQuestionLine, focusLine, ...sentences, toneLine, themeLine, focus.closing5]
+          .filter(Boolean)
+          .join(' ');
+      }
+
+      return [introLine, exactQuestionLine, focusLine, ...sentences, toneLine, themeLine].filter(Boolean).join(' ');
+    }
+
+    function positionSentence(label, card) {
+      const meaning = meaningPhrase(card.meaning);
+      const verb = toneVerbForPosition(label);
+      switch (label) {
+        case 'Past':
+          return `In the Past position, ${card.name} ${verb} ${meaning}.`;
+        case 'Present':
+          return `In the Present position, ${card.name} ${verb} ${meaning}.`;
+        case 'Future':
+          return `In the Future position, ${card.name} ${verb} ${meaning}.`;
+        case 'Theme':
+          return `At the Theme position, ${card.name} ${verb} ${meaning}.`;
+        case 'Challenge':
+          return `At the Challenge position, ${card.name} ${verb} ${meaning}.`;
+        case 'Guidance':
+          return `At the Guidance position, ${card.name} ${verb} ${meaning}.`;
+        case 'Action':
+          return `At the Action position, ${card.name} ${verb} ${meaning}.`;
+        case 'Outcome':
+          return `At the Outcome position, ${card.name} ${verb} ${meaning}.`;
+        default:
+          return `For ${label}, ${card.name} ${verb} ${meaning}.`;
+      }
+    }
+
+    function meaningPhrase(text) {
+      const trimmed = String(text || '').trim().replace(/[.!? ]+$/g, '');
+      if (!trimmed) return 'an important message';
+      return trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+    }
+
+    function buildArcanaToneLine(cards) {
+      if (!cards.length) return '';
+      const arcanaCounts = cards.reduce((acc, c) => {
+        acc[c.arcana] = (acc[c.arcana] || 0) + 1;
+        return acc;
+      }, {});
+
+      const dominantArcana = Object.entries(arcanaCounts)
+        .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+      if (!dominantArcana) return '';
+      return `The dominant tone so far is ${dominantArcana}, highlighting ${arcanaInterpretation(dominantArcana)}.`;
+    }
+
+    function oneCardGuidanceLine(card) {
+      const baseBySuit = {
+        Major: 'This feels like a meaningful moment with a bigger lesson unfolding beneath the surface.',
+        Wands: 'This card favors momentum, confidence, and taking a clear step forward.',
+        Cups: 'This card invites you to honor emotions, connection, and intuitive truth.',
+        Swords: 'This card asks for clarity, honest thinking, and careful communication.',
+        Pentacles: 'This card emphasizes practical action, steadiness, and grounded progress.'
+      };
+
+      const focusAddOn = {
+        general: 'Apply it to the area of life asking most strongly for your attention right now.',
+        love: 'Notice how this message shows up in closeness, communication, boundaries, or mutual effort.',
+        career: 'Translate this into your next professional decision, work habit, or action step.'
+      };
+
+      const toneEnding = tonePick({
+        gentle: 'Take what resonates and move one step at a time.',
+        spiritual: 'Sit with the message and let your intuition reveal the deeper layer.',
+        practical: 'Use this as a concrete checkpoint for your next decision.',
+        direct: 'Use it. Act on it.'
+      });
+
+      return `${baseBySuit[card.arcana] || 'Today’s energy invites you to move with awareness and intention.'} ${focusAddOn[appState.readingFocus] || focusAddOn.general} ${toneEnding}`;
     }
 
     function extractKeywords(text) {
@@ -766,8 +1050,8 @@
       }
 
       modeHint.textContent = appState.revealMode === 'step'
-        ? '1-by-1 mode is active. Tap the next facedown card (or use “Draw Next Card”). The deck is shuffled only when you start a new reading.'
-        : 'Reveal All mode is active. Tap “Reveal Remaining” to unveil all selected cards, or tap cards manually. The deck is shuffled only when you start a new reading.';
+        ? `1-by-1 mode is active. Tap the next facedown card (or use “Draw Next Card”). The deck is shuffled only when you start a new reading. Focus: ${appState.readingFocus}. Tone: ${appState.summaryTone}. ${cleanedQuestionText() ? 'Question set: yes.' : 'Question set: optional.'}`
+        : `Reveal All mode is active. Tap “Reveal Remaining” to unveil all selected cards, or tap cards manually. The deck is shuffled only when you start a new reading. Focus: ${appState.readingFocus}. Tone: ${appState.summaryTone}. ${cleanedQuestionText() ? 'Question set: yes.' : 'Question set: optional.'}`;
     }
 
     function renderCards() {
@@ -855,6 +1139,11 @@
     function renderAll() {
       setActiveButtonGroup(spreadButtons, 'spread', appState.spreadSize);
       setActiveButtonGroup(modeButtons, 'mode', appState.revealMode);
+      setActiveButtonGroup(focusButtons, 'focus', appState.readingFocus);
+      setActiveButtonGroup(toneButtons, 'tone', appState.summaryTone);
+      if (questionInput && questionInput.value !== appState.questionText) {
+        questionInput.value = appState.questionText;
+      }
       renderControls();
       renderStatus();
       renderCards();
@@ -887,6 +1176,29 @@
       const nextMode = btn.dataset.mode;
       if (!['step', 'bulk'].includes(nextMode)) return;
       appState.revealMode = nextMode;
+      renderAll();
+    });
+
+    focusButtons.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-focus]');
+      if (!btn) return;
+      const nextFocus = btn.dataset.focus;
+      if (!['general', 'love', 'career'].includes(nextFocus)) return;
+      appState.readingFocus = nextFocus;
+      renderAll();
+    });
+
+    toneButtons.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-tone]');
+      if (!btn) return;
+      const nextTone = btn.dataset.tone;
+      if (!['spiritual', 'practical', 'direct', 'gentle'].includes(nextTone)) return;
+      appState.summaryTone = nextTone;
+      renderAll();
+    });
+
+    questionInput.addEventListener('input', (e) => {
+      appState.questionText = e.target.value || '';
       renderAll();
     });
 
