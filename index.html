@@ -86,14 +86,19 @@
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 14px;
       padding: 10px;
+      min-width: 0;
+      margin: 0;
     }
 
-    .group label.head {
+    .group .head {
       display: block;
       font-size: 0.82rem;
       color: var(--muted);
       margin-bottom: 8px;
       font-weight: 600;
+    }
+    .group legend.head {
+      padding: 0;
     }
 
     .text-input {
@@ -232,6 +237,10 @@
     }
     .card:hover { transform: translateY(-2px); }
     .card.disabled { cursor: default; }
+    .card:disabled {
+      cursor: default;
+    }
+    .card:disabled:hover { transform: none; }
 
     .card.back {
       background:
@@ -413,41 +422,41 @@
 
     <section class="panel controls" aria-label="Controls">
       <div class="row two">
-        <div class="group">
-          <label class="head">Spread Size</label>
+        <fieldset class="group">
+          <legend class="head">Spread Size</legend>
           <div class="segmented" id="spreadButtons">
             <button data-spread="1" class="active" type="button">1 Card</button>
             <button data-spread="3" type="button">3 Cards</button>
             <button data-spread="5" type="button">5 Cards</button>
           </div>
-        </div>
-        <div class="group">
-          <label class="head">Reveal Mode</label>
+        </fieldset>
+        <fieldset class="group">
+          <legend class="head">Reveal Mode</legend>
           <div class="segmented" id="modeButtons">
             <button data-mode="step" class="active" type="button">Pick 1 by 1</button>
             <button data-mode="bulk" type="button">Reveal All</button>
           </div>
-        </div>
+        </fieldset>
       </div>
 
       <div class="row two">
-        <div class="group">
-          <label class="head">Reading Focus</label>
+        <fieldset class="group">
+          <legend class="head">Reading Focus</legend>
           <div class="segmented" id="focusButtons">
             <button data-focus="general" class="active" type="button">General</button>
             <button data-focus="love" type="button">Love</button>
             <button data-focus="career" type="button">Career</button>
           </div>
-        </div>
-        <div class="group">
-          <label class="head">Summary Tone</label>
+        </fieldset>
+        <fieldset class="group">
+          <legend class="head">Summary Tone</legend>
           <div class="segmented" id="toneButtons">
             <button data-tone="gentle" class="active" type="button">Gentle</button>
             <button data-tone="spiritual" type="button">Spiritual</button>
             <button data-tone="practical" type="button">Practical</button>
             <button data-tone="direct" type="button">Direct</button>
           </div>
-        </div>
+        </fieldset>
       </div>
 
       <div class="row">
@@ -596,6 +605,10 @@
       questionText: ''
     };
 
+    let shuffleCommitTimerId = null;
+    let shuffleDoneFlashTimerId = null;
+    let shuffleRunToken = 0;
+
     const spreadButtons = document.getElementById('spreadButtons');
     const modeButtons = document.getElementById('modeButtons');
     const focusButtons = document.getElementById('focusButtons');
@@ -617,6 +630,24 @@
       3: ['Past', 'Present', 'Future'],
       5: ['Theme', 'Challenge', 'Guidance', 'Action', 'Outcome']
     };
+
+    function cancelPendingShuffle() {
+      if (shuffleCommitTimerId !== null) {
+        window.clearTimeout(shuffleCommitTimerId);
+        shuffleCommitTimerId = null;
+      }
+      if (shuffleDoneFlashTimerId !== null) {
+        window.clearTimeout(shuffleDoneFlashTimerId);
+        shuffleDoneFlashTimerId = null;
+      }
+      shuffleRunToken += 1;
+    }
+
+    function setButtonsDisabled(container, disabled) {
+      [...container.querySelectorAll('button')].forEach(btn => {
+        btn.disabled = disabled;
+      });
+    }
 
     function shuffle(array) {
       const arr = [...array];
@@ -658,11 +689,23 @@
     }
 
     function startNewReading() {
+      if (appState.shuffleState === 'shuffling') return;
+
+      cancelPendingShuffle();
+      const runToken = shuffleRunToken;
+
       // Visual shuffle animation before committing the reading
+      appState.deck = [];
+      appState.selectedCards = [];
+      appState.revealedCount = 0;
+      appState.readingActive = false;
       appState.shuffleState = 'shuffling';
       renderAll();
 
-      window.setTimeout(() => {
+      shuffleCommitTimerId = window.setTimeout(() => {
+        shuffleCommitTimerId = null;
+        if (runToken !== shuffleRunToken || appState.shuffleState !== 'shuffling') return;
+
         appState.deck = shuffle(TAROT_DECK);
         appState.selectedCards = appState.deck.slice(0, appState.spreadSize);
         appState.revealedCount = 0;
@@ -670,7 +713,10 @@
         appState.shuffleState = 'done';
         renderAll();
 
-        window.setTimeout(() => {
+        shuffleDoneFlashTimerId = window.setTimeout(() => {
+          shuffleDoneFlashTimerId = null;
+          if (runToken !== shuffleRunToken) return;
+
           if (appState.shuffleState === 'done') {
             appState.shuffleState = 'idle';
             renderAll();
@@ -680,6 +726,7 @@
     }
 
     function resetReading() {
+      cancelPendingShuffle();
       appState.deck = [];
       appState.selectedCards = [];
       appState.revealedCount = 0;
@@ -1037,6 +1084,12 @@
       const done = appState.revealedCount >= appState.spreadSize;
       const isShuffling = appState.shuffleState === 'shuffling';
 
+      setButtonsDisabled(spreadButtons, isShuffling);
+      setButtonsDisabled(modeButtons, isShuffling);
+      setButtonsDisabled(focusButtons, isShuffling);
+      setButtonsDisabled(toneButtons, isShuffling);
+      questionInput.disabled = isShuffling;
+
       newReadingBtn.disabled = isShuffling;
       drawNextBtn.disabled = !active || done || isShuffling;
       revealAllBtn.disabled = !active || done || isShuffling;
@@ -1068,19 +1121,22 @@
         label.textContent = labels[i] || `Card ${i + 1}`;
 
         const isRevealed = appState.readingActive && i < appState.revealedCount;
+        const canTap = appState.readingActive && !isRevealed &&
+          (appState.revealMode === 'bulk' || i === appState.revealedCount);
         const card = document.createElement('button');
         card.type = 'button';
-        card.className = `card ${isRevealed ? 'face' : 'back'} ${!appState.readingActive ? 'disabled' : ''}`;
+        card.className = `card ${isRevealed ? 'face' : 'back'} ${!canTap ? 'disabled' : ''}`.trim();
+        card.disabled = !canTap;
+        card.setAttribute('aria-disabled', String(!canTap));
         card.setAttribute('aria-label', isRevealed ? `Revealed card ${i + 1}` : `Facedown card ${i + 1}`);
 
         if (!appState.readingActive) {
           card.innerHTML = `
             <div class="card-back-inner">
               <div class="sigil"><div class="moon">☾</div></div>
-              <div class="deck-count">Tap “Start New Reading”</div>
+              <div class="deck-count">Tap “Shuffle Deck & Start Reading”</div>
             </div>`;
         } else if (!isRevealed) {
-          const canTap = appState.revealMode === 'bulk' || i === appState.revealedCount;
           card.innerHTML = `
             <div class="card-back-inner">
               <div class="sigil"><div class="moon">✦</div></div>
@@ -1161,6 +1217,7 @@
 
     // --- Event wiring ---
     spreadButtons.addEventListener('click', (e) => {
+      if (appState.shuffleState === 'shuffling') return;
       const btn = e.target.closest('button[data-spread]');
       if (!btn) return;
       const nextSpread = Number(btn.dataset.spread);
@@ -1171,6 +1228,7 @@
     });
 
     modeButtons.addEventListener('click', (e) => {
+      if (appState.shuffleState === 'shuffling') return;
       const btn = e.target.closest('button[data-mode]');
       if (!btn) return;
       const nextMode = btn.dataset.mode;
@@ -1180,6 +1238,7 @@
     });
 
     focusButtons.addEventListener('click', (e) => {
+      if (appState.shuffleState === 'shuffling') return;
       const btn = e.target.closest('button[data-focus]');
       if (!btn) return;
       const nextFocus = btn.dataset.focus;
@@ -1189,6 +1248,7 @@
     });
 
     toneButtons.addEventListener('click', (e) => {
+      if (appState.shuffleState === 'shuffling') return;
       const btn = e.target.closest('button[data-tone]');
       if (!btn) return;
       const nextTone = btn.dataset.tone;
@@ -1198,8 +1258,10 @@
     });
 
     questionInput.addEventListener('input', (e) => {
+      if (appState.shuffleState === 'shuffling') return;
       appState.questionText = e.target.value || '';
-      renderAll();
+      renderControls();
+      renderPickedListAndSummary();
     });
 
     newReadingBtn.addEventListener('click', startNewReading);
