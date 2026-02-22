@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tarot Draw — 1 / 3 / 5 Cards</title>
+  <style>
+    :root {
+      --bg: #0f1020;
+      --panel: rgba(255,255,255,0.08);
+      --panel-2: rgba(255,255,255,0.12);
+      --text: #f5f1ff;
+      --muted: #cfc7e8;
+      --accent: #b48cff;
+      --accent-2: #6be6ff;
+      --gold: #ffd57a;
+      --danger: #ff8d8d;
+      --ok: #91ffbf;
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(180,140,255,0.18), transparent 40%),
+        radial-gradient(circle at 90% 10%, rgba(107,230,255,0.12), transparent 45%),
+        radial-gradient(circle at 50% 100%, rgba(255,213,122,0.08), transparent 45%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .app {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px 14px 48px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .title {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.8vw, 2rem);
+      font-weight: 800;
+      letter-spacing: 0.2px;
+    }
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.35;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel), rgba(255,255,255,0.05));
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .row {
+      display: grid;
+      gap: 10px;
+    }
+
+    @media (min-width: 780px) {
+      .row.two { grid-template-columns: 1fr 1fr; }
+      .row.actions { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .group {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 10px;
+    }
+
+    .group label.head {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .segmented {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .segmented button,
+    .btn {
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      min-height: 42px;
+    }
+    .segmented button:hover, .btn:hover { transform: translateY(-1px); }
+    .segmented button.active {
+      background: linear-gradient(180deg, rgba(180,140,255,0.28), rgba(107,230,255,0.16));
+      border-color: rgba(180,140,255,0.55);
+      box-shadow: 0 0 0 1px rgba(180,140,255,0.15) inset;
+    }
+    .btn.primary {
+      background: linear-gradient(135deg, rgba(180,140,255,.28), rgba(107,230,255,.22));
+      border-color: rgba(180,140,255,0.45);
+    }
+    .btn.shuffling {
+      position: relative;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0.9;
+    }
+    .btn.shuffling::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -40%;
+      width: 35%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+      animation: sweep 0.8s linear infinite;
+    }
+    @keyframes sweep {
+      from { left: -40%; }
+      to { left: 120%; }
+    }
+    .btn.secondary { color: var(--muted); }
+    .btn.warn { border-color: rgba(255,141,141,.35); }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
+
+    .status {
+      padding: 10px 12px;
+      font-size: .9rem;
+      color: var(--muted);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+    }
+    .status strong { color: var(--text); }
+
+    .board {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 900px) {
+      .board { grid-template-columns: 1.1fr 1fr; align-items: start; }
+    }
+
+    .cards-panel { padding: 14px; }
+    .cards-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    @media (min-width: 520px) {
+      .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (min-width: 900px) {
+      .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    .slot {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+    }
+    .slot-label {
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-align: center;
+      min-height: 18px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 180px;
+      aspect-ratio: 2 / 3.15;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.03);
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .card:hover { transform: translateY(-2px); }
+    .card.disabled { cursor: default; }
+
+    .card.back {
+      background:
+        radial-gradient(circle at 70% 25%, rgba(180,140,255,.25), transparent 45%),
+        radial-gradient(circle at 25% 80%, rgba(107,230,255,.16), transparent 50%),
+        linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+    }
+
+    .card-back-inner {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      padding: 10px;
+    }
+    .sigil {
+      width: 68%; aspect-ratio: 1;
+      border-radius: 50%;
+      border: 1px solid rgba(255,213,122,0.35);
+      display: grid; place-items: center;
+      position: relative;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .sigil::before, .sigil::after {
+      content: "";
+      position: absolute;
+      border: 1px solid rgba(180,140,255,0.2);
+      border-radius: 50%;
+      inset: 10%;
+    }
+    .sigil::after { inset: 22%; border-color: rgba(107,230,255,0.18); }
+    .moon {
+      font-size: clamp(1.6rem, 4vw, 2rem);
+      color: var(--gold);
+      text-shadow: 0 0 14px rgba(255,213,122,.2);
+    }
+    .deck-count {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      right: 8px;
+      text-align: center;
+      font-size: .75rem;
+      color: var(--muted);
+      background: rgba(0,0,0,0.16);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 999px;
+      padding: 4px 8px;
+      backdrop-filter: blur(3px);
+    }
+
+    .card.face {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
+        rgba(18, 16, 34, 0.92);
+      border-color: rgba(180,140,255,0.35);
+    }
+    .card-face-inner {
+      position: absolute; inset: 0;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      padding: 10px;
+      gap: 8px;
+    }
+    .chip-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    }
+    .chip {
+      font-size: .68rem;
+      color: var(--muted);
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.04);
+      border-radius: 999px;
+      padding: 3px 7px;
+      white-space: nowrap;
+    }
+    .card-title {
+      font-weight: 800;
+      font-size: .95rem;
+      line-height: 1.2;
+      color: var(--text);
+    }
+    .symbol-box {
+      display: grid; place-items: center;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(180deg, rgba(180,140,255,0.08), rgba(107,230,255,0.03));
+      font-size: 2rem;
+    }
+    .mini-meaning {
+      font-size: .78rem;
+      line-height: 1.25;
+      color: var(--muted);
+    }
+
+    .details-panel {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .section {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .section h3 {
+      margin: 0 0 8px;
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+    .section p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.92rem;
+    }
+
+    .picked-list {
+      display: grid;
+      gap: 10px;
+    }
+    .picked-item {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(255,255,255,0.02);
+    }
+    .picked-item .name {
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .picked-item .meaning {
+      color: var(--muted);
+      line-height: 1.4;
+      font-size: .9rem;
+    }
+
+    .hint {
+      font-size: .84rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .footer-note {
+      margin-top: 14px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.82rem;
+      opacity: .9;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.03);
+      font-size: .76rem;
+      color: var(--muted);
+    }
+
+    .success { color: var(--ok); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="title">🔮 Tarot Draw</h1>
+      <p class="subtitle">Choose a 1, 3, or 5-card spread. Draw one by one, or reveal all at once. Mobile-friendly, single-page app for GitHub Pages.</p>
+    </header>
+
+    <section class="panel controls" aria-label="Controls">
+      <div class="row two">
+        <div class="group">
+          <label class="head">Spread Size</label>
+          <div class="segmented" id="spreadButtons">
+            <button data-spread="1" class="active" type="button">1 Card</button>
+            <button data-spread="3" type="button">3 Cards</button>
+            <button data-spread="5" type="button">5 Cards</button>
+          </div>
+        </div>
+        <div class="group">
+          <label class="head">Reveal Mode</label>
+          <div class="segmented" id="modeButtons">
+            <button data-mode="step" class="active" type="button">Pick 1 by 1</button>
+            <button data-mode="bulk" type="button">Reveal All</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row actions">
+        <button class="btn primary" id="newReadingBtn" type="button" title="Shuffles the full 78-card deck and starts a new reading">🔀 Shuffle Deck & Start Reading</button>
+        <button class="btn" id="drawNextBtn" type="button">🃏 Draw Next Card</button>
+        <button class="btn" id="revealAllBtn" type="button">⚡ Reveal Remaining</button>
+        <button class="btn secondary warn" id="resetBtn" type="button">↺ Reset</button>
+      </div>
+
+      <div class="status" id="statusLine" aria-live="polite"></div>
+      <div class="hint" id="shuffleHint">Tap <strong>Shuffle Deck & Start Reading</strong> to randomize all 78 cards before each new reading.</div>
+    </section>
+
+    <section class="board">
+      <section class="panel cards-panel" aria-label="Card spread area">
+        <div class="cards-grid" id="cardsGrid"></div>
+      </section>
+
+      <aside class="panel details-panel" aria-label="Reading details">
+        <div class="section">
+          <h3>How it works</h3>
+          <p id="modeHint">Choose your spread and reveal mode, then start a new reading. In 1-by-1 mode, tap a facedown card slot or use “Draw Next Card”. In bulk mode, use “Reveal Remaining” or tap each card to unveil.</p>
+        </div>
+
+        <div class="section">
+          <h3>Selected Cards</h3>
+          <div id="pickedList" class="picked-list"></div>
+          <p id="emptyPicked" class="hint">No cards revealed yet.</p>
+        </div>
+
+        <div class="section">
+          <h3>Reading Summary</h3>
+          <p id="summaryText">Your summary will appear here after you reveal card(s).</p>
+        </div>
+      </aside>
+    </section>
+
+    <div class="footer-note">Built as a static front-end app (HTML/CSS/JS). Ready for GitHub Pages deployment.</div>
+  </div>
+
+  <script>
+    // --- 78-card Tarot deck (upright-style concise meanings) ---
+    const TAROT_DECK = [
+      { name: 'The Fool', arcana: 'Major', emoji: '🪶', meaning: 'New beginnings, spontaneity, trust in the journey, and taking a leap of faith.' },
+      { name: 'The Magician', arcana: 'Major', emoji: '✨', meaning: 'Manifestation, skill, confidence, and using available tools to create results.' },
+      { name: 'The High Priestess', arcana: 'Major', emoji: '🌙', meaning: 'Intuition, inner wisdom, mystery, and listening to what is not obvious.' },
+      { name: 'The Empress', arcana: 'Major', emoji: '🌸', meaning: 'Nurturing energy, abundance, beauty, creativity, and growth.' },
+      { name: 'The Emperor', arcana: 'Major', emoji: '🛡️', meaning: 'Structure, leadership, discipline, boundaries, and stability.' },
+      { name: 'The Hierophant', arcana: 'Major', emoji: '📿', meaning: 'Tradition, guidance, learning, values, and established systems.' },
+      { name: 'The Lovers', arcana: 'Major', emoji: '❤️', meaning: 'Connection, alignment, relationships, and meaningful choices.' },
+      { name: 'The Chariot', arcana: 'Major', emoji: '🏇', meaning: 'Willpower, focus, movement, and victory through determination.' },
+      { name: 'Strength', arcana: 'Major', emoji: '🦁', meaning: 'Courage, patience, compassion, and calm inner strength.' },
+      { name: 'The Hermit', arcana: 'Major', emoji: '🕯️', meaning: 'Reflection, solitude, wisdom, and seeking truth within.' },
+      { name: 'Wheel of Fortune', arcana: 'Major', emoji: '🎡', meaning: 'Cycles, turning points, luck, and changing circumstances.' },
+      { name: 'Justice', arcana: 'Major', emoji: '⚖️', meaning: 'Truth, fairness, accountability, and balanced decisions.' },
+      { name: 'The Hanged Man', arcana: 'Major', emoji: '🪢', meaning: 'Pause, surrender, perspective shift, and letting go of control.' },
+      { name: 'Death', arcana: 'Major', emoji: '🦋', meaning: 'Endings, transformation, release, and powerful renewal.' },
+      { name: 'Temperance', arcana: 'Major', emoji: '🧪', meaning: 'Balance, moderation, patience, and harmonious integration.' },
+      { name: 'The Devil', arcana: 'Major', emoji: '⛓️', meaning: 'Attachment, temptation, limiting patterns, and reclaiming freedom.' },
+      { name: 'The Tower', arcana: 'Major', emoji: '⚡', meaning: 'Sudden change, disruption, revelation, and necessary breakthrough.' },
+      { name: 'The Star', arcana: 'Major', emoji: '⭐', meaning: 'Hope, healing, inspiration, and trust in what is possible.' },
+      { name: 'The Moon', arcana: 'Major', emoji: '🌘', meaning: 'Dreams, uncertainty, illusion, intuition, and emotional depth.' },
+      { name: 'The Sun', arcana: 'Major', emoji: '☀️', meaning: 'Joy, clarity, vitality, success, and warm confidence.' },
+      { name: 'Judgement', arcana: 'Major', emoji: '📯', meaning: 'Awakening, reflection, calling, and a fresh level of understanding.' },
+      { name: 'The World', arcana: 'Major', emoji: '🌍', meaning: 'Completion, wholeness, achievement, and integration.' },
+
+      { name: 'Ace of Wands', arcana: 'Wands', emoji: '🔥', meaning: 'Spark of inspiration, creative urge, motivation, and new energy.' },
+      { name: 'Two of Wands', arcana: 'Wands', emoji: '🗺️', meaning: 'Planning, future vision, choices, and expanding horizons.' },
+      { name: 'Three of Wands', arcana: 'Wands', emoji: '⛵', meaning: 'Progress, momentum, foresight, and opportunities arriving.' },
+      { name: 'Four of Wands', arcana: 'Wands', emoji: '🎉', meaning: 'Celebration, harmony, milestones, and joyful stability.' },
+      { name: 'Five of Wands', arcana: 'Wands', emoji: '🥊', meaning: 'Competition, tension, mixed opinions, and productive friction.' },
+      { name: 'Six of Wands', arcana: 'Wands', emoji: '🏆', meaning: 'Recognition, confidence, success, and public support.' },
+      { name: 'Seven of Wands', arcana: 'Wands', emoji: '🧱', meaning: 'Defending your ground, perseverance, and conviction.' },
+      { name: 'Eight of Wands', arcana: 'Wands', emoji: '💨', meaning: 'Speed, rapid movement, communication, and swift progress.' },
+      { name: 'Nine of Wands', arcana: 'Wands', emoji: '🩹', meaning: 'Resilience, persistence, boundaries, and staying prepared.' },
+      { name: 'Ten of Wands', arcana: 'Wands', emoji: '🎒', meaning: 'Burden, responsibility, workload, and the need to delegate.' },
+      { name: 'Page of Wands', arcana: 'Wands', emoji: '📨', meaning: 'Curiosity, enthusiasm, exploration, and bold beginner energy.' },
+      { name: 'Knight of Wands', arcana: 'Wands', emoji: '🏍️', meaning: 'Adventure, action, passion, and impulsive momentum.' },
+      { name: 'Queen of Wands', arcana: 'Wands', emoji: '👑', meaning: 'Warm confidence, charisma, creativity, and independent spirit.' },
+      { name: 'King of Wands', arcana: 'Wands', emoji: '🦅', meaning: 'Visionary leadership, bold action, and strategic confidence.' },
+
+      { name: 'Ace of Cups', arcana: 'Cups', emoji: '💧', meaning: 'Emotional renewal, love, compassion, and open-hearted beginnings.' },
+      { name: 'Two of Cups', arcana: 'Cups', emoji: '🤝', meaning: 'Partnership, mutual respect, attraction, and balanced connection.' },
+      { name: 'Three of Cups', arcana: 'Cups', emoji: '🥂', meaning: 'Friendship, community, celebration, and shared joy.' },
+      { name: 'Four of Cups', arcana: 'Cups', emoji: '☁️', meaning: 'Apathy, contemplation, emotional pause, and reevaluating desire.' },
+      { name: 'Five of Cups', arcana: 'Cups', emoji: '🌧️', meaning: 'Loss, disappointment, grieving, and noticing what still remains.' },
+      { name: 'Six of Cups', arcana: 'Cups', emoji: '🧸', meaning: 'Nostalgia, kindness, memories, and innocence.' },
+      { name: 'Seven of Cups', arcana: 'Cups', emoji: '🎭', meaning: 'Options, imagination, temptation, and the need for clarity.' },
+      { name: 'Eight of Cups', arcana: 'Cups', emoji: '🚶', meaning: 'Walking away, deeper meaning, transition, and emotional honesty.' },
+      { name: 'Nine of Cups', arcana: 'Cups', emoji: '🍀', meaning: 'Satisfaction, gratitude, pleasure, and a wish fulfilled.' },
+      { name: 'Ten of Cups', arcana: 'Cups', emoji: '🌈', meaning: 'Emotional fulfillment, harmony, family joy, and lasting happiness.' },
+      { name: 'Page of Cups', arcana: 'Cups', emoji: '🐟', meaning: 'Gentle messages, creativity, sensitivity, and emotional openness.' },
+      { name: 'Knight of Cups', arcana: 'Cups', emoji: '🌹', meaning: 'Romance, charm, imagination, and following the heart.' },
+      { name: 'Queen of Cups', arcana: 'Cups', emoji: '🪞', meaning: 'Empathy, intuition, emotional maturity, and nurturing wisdom.' },
+      { name: 'King of Cups', arcana: 'Cups', emoji: '🌊', meaning: 'Emotional balance, calm leadership, compassion, and diplomacy.' },
+
+      { name: 'Ace of Swords', arcana: 'Swords', emoji: '🗡️', meaning: 'Mental clarity, truth, breakthrough, and a sharp new idea.' },
+      { name: 'Two of Swords', arcana: 'Swords', emoji: '🪶', meaning: 'Indecision, stalemate, guardedness, and difficult choices.' },
+      { name: 'Three of Swords', arcana: 'Swords', emoji: '💔', meaning: 'Heartbreak, truth that hurts, grief, and emotional release.' },
+      { name: 'Four of Swords', arcana: 'Swords', emoji: '🛏️', meaning: 'Rest, recovery, pause, and mental reset.' },
+      { name: 'Five of Swords', arcana: 'Swords', emoji: '🫥', meaning: 'Conflict, ego tension, hollow victory, and reassessing approach.' },
+      { name: 'Six of Swords', arcana: 'Swords', emoji: '⛴️', meaning: 'Transition, moving forward, healing, and gradual progress.' },
+      { name: 'Seven of Swords', arcana: 'Swords', emoji: '🕵️', meaning: 'Strategy, secrecy, caution, and acting carefully.' },
+      { name: 'Eight of Swords', arcana: 'Swords', emoji: '🕸️', meaning: 'Feeling trapped, fear, self-limiting beliefs, and perspective needed.' },
+      { name: 'Nine of Swords', arcana: 'Swords', emoji: '🌃', meaning: 'Anxiety, overthinking, worry, and mental stress.' },
+      { name: 'Ten of Swords', arcana: 'Swords', emoji: '🩶', meaning: 'Painful ending, release, finality, and the dawn after difficulty.' },
+      { name: 'Page of Swords', arcana: 'Swords', emoji: '🛰️', meaning: 'Curiosity, vigilance, new ideas, and mental agility.' },
+      { name: 'Knight of Swords', arcana: 'Swords', emoji: '🌪️', meaning: 'Fast action, ambition, urgency, and direct communication.' },
+      { name: 'Queen of Swords', arcana: 'Swords', emoji: '❄️', meaning: 'Discernment, honesty, independence, and clear boundaries.' },
+      { name: 'King of Swords', arcana: 'Swords', emoji: '🧠', meaning: 'Logic, authority, strategy, and objective decision-making.' },
+
+      { name: 'Ace of Pentacles', arcana: 'Pentacles', emoji: '🪙', meaning: 'New opportunity, stability, practical beginnings, and potential.' },
+      { name: 'Two of Pentacles', arcana: 'Pentacles', emoji: '🤹', meaning: 'Balance, adaptability, time management, and juggling priorities.' },
+      { name: 'Three of Pentacles', arcana: 'Pentacles', emoji: '🛠️', meaning: 'Teamwork, craftsmanship, learning, and shared effort.' },
+      { name: 'Four of Pentacles', arcana: 'Pentacles', emoji: '🔒', meaning: 'Security, control, saving, and holding on tightly.' },
+      { name: 'Five of Pentacles', arcana: 'Pentacles', emoji: '🧥', meaning: 'Hardship, scarcity mindset, support needed, and resilience.' },
+      { name: 'Six of Pentacles', arcana: 'Pentacles', emoji: '🎁', meaning: 'Generosity, exchange, support, and balanced giving/receiving.' },
+      { name: 'Seven of Pentacles', arcana: 'Pentacles', emoji: '🌱', meaning: 'Patience, investment, long-term growth, and assessment.' },
+      { name: 'Eight of Pentacles', arcana: 'Pentacles', emoji: '🔧', meaning: 'Skill-building, dedication, mastery, and consistent work.' },
+      { name: 'Nine of Pentacles', arcana: 'Pentacles', emoji: '🏡', meaning: 'Self-sufficiency, comfort, refinement, and earned rewards.' },
+      { name: 'Ten of Pentacles', arcana: 'Pentacles', emoji: '🏠', meaning: 'Legacy, wealth, family stability, and long-term security.' },
+      { name: 'Page of Pentacles', arcana: 'Pentacles', emoji: '📘', meaning: 'Study, ambition, practical curiosity, and grounded beginnings.' },
+      { name: 'Knight of Pentacles', arcana: 'Pentacles', emoji: '🐢', meaning: 'Reliability, routine, diligence, and steady progress.' },
+      { name: 'Queen of Pentacles', arcana: 'Pentacles', emoji: '🌿', meaning: 'Nurturing abundance, practicality, comfort, and resourcefulness.' },
+      { name: 'King of Pentacles', arcana: 'Pentacles', emoji: '💼', meaning: 'Prosperity, leadership, discipline, and material mastery.' }
+    ];
+
+    const appState = {
+      spreadSize: 1,
+      revealMode: 'step', // step | bulk
+      deck: [],
+      selectedCards: [],
+      revealedCount: 0,
+      readingActive: false,
+      shuffleState: 'idle' // idle | shuffling | done
+    };
+
+    const spreadButtons = document.getElementById('spreadButtons');
+    const modeButtons = document.getElementById('modeButtons');
+    const newReadingBtn = document.getElementById('newReadingBtn');
+    const drawNextBtn = document.getElementById('drawNextBtn');
+    const revealAllBtn = document.getElementById('revealAllBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusLine = document.getElementById('statusLine');
+    const cardsGrid = document.getElementById('cardsGrid');
+    const pickedList = document.getElementById('pickedList');
+    const emptyPicked = document.getElementById('emptyPicked');
+    const summaryText = document.getElementById('summaryText');
+    const modeHint = document.getElementById('modeHint');
+
+    const spreadPositionLabels = {
+      1: ['Your Card'],
+      3: ['Past', 'Present', 'Future'],
+      5: ['Theme', 'Challenge', 'Guidance', 'Action', 'Outcome']
+    };
+
+    function shuffle(array) {
+      const arr = [...array];
+
+      // Cryptographically stronger randomness for browser-based shuffling
+      // Falls back to Math.random() only if crypto is unavailable.
+      const cryptoObj = (window.crypto || window.msCrypto);
+
+      if (cryptoObj && cryptoObj.getRandomValues) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          // Rejection sampling to avoid modulo bias
+          const maxUint32 = 0x100000000;
+          const limit = maxUint32 - (maxUint32 % (i + 1));
+          let rand;
+          const buf = new Uint32Array(1);
+
+          do {
+            cryptoObj.getRandomValues(buf);
+            rand = buf[0];
+          } while (rand >= limit);
+
+          const j = rand % (i + 1);
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function setActiveButtonGroup(container, key, value) {
+      [...container.querySelectorAll('button')].forEach(btn => {
+        btn.classList.toggle('active', String(btn.dataset[key]) === String(value));
+      });
+    }
+
+    function startNewReading() {
+      // Visual shuffle animation before committing the reading
+      appState.shuffleState = 'shuffling';
+      renderAll();
+
+      window.setTimeout(() => {
+        appState.deck = shuffle(TAROT_DECK);
+        appState.selectedCards = appState.deck.slice(0, appState.spreadSize);
+        appState.revealedCount = 0;
+        appState.readingActive = true;
+        appState.shuffleState = 'done';
+        renderAll();
+
+        window.setTimeout(() => {
+          if (appState.shuffleState === 'done') {
+            appState.shuffleState = 'idle';
+            renderAll();
+          }
+        }, 900);
+      }, 950);
+    }
+
+    function resetReading() {
+      appState.deck = [];
+      appState.selectedCards = [];
+      appState.revealedCount = 0;
+      appState.readingActive = false;
+      appState.shuffleState = 'idle';
+      renderAll();
+    }
+
+    function revealCard(index) {
+      if (!appState.readingActive) return;
+      if (index < 0 || index >= appState.selectedCards.length) return;
+      if (index < appState.revealedCount) return; // already revealed in order mode or same card
+
+      if (appState.revealMode === 'step') {
+        // enforce sequential revealing only
+        if (index !== appState.revealedCount) return;
+        appState.revealedCount += 1;
+      } else {
+        // bulk mode allows tapping any unrevealed card, but still count contiguous reveal display by marking ordered reveal
+        // simplest UX: reveal up to clicked card sequentially if needed
+        if (index >= appState.revealedCount) {
+          appState.revealedCount = index + 1;
+        }
+      }
+      renderAll();
+    }
+
+    function drawNext() {
+      if (!appState.readingActive) return;
+      if (appState.revealedCount >= appState.spreadSize) return;
+      appState.revealedCount += 1;
+      renderAll();
+    }
+
+    function revealRemaining() {
+      if (!appState.readingActive) return;
+      appState.revealedCount = appState.spreadSize;
+      renderAll();
+    }
+
+    function getRevealedCards() {
+      return appState.selectedCards.slice(0, appState.revealedCount);
+    }
+
+    function summarizeReading(cards) {
+      if (!cards.length) {
+        return 'Your summary will appear here after you reveal card(s).';
+      }
+
+      if (cards.length === 1) {
+        const c = cards[0];
+        return `${c.name} suggests a focus on ${extractKeywords(c.meaning)}. Today’s energy invites you to move with awareness and intention.`;
+      }
+
+      const arcanaCounts = cards.reduce((acc, c) => {
+        acc[c.arcana] = (acc[c.arcana] || 0) + 1;
+        return acc;
+      }, {});
+
+      const dominantArcana = Object.entries(arcanaCounts)
+        .sort((a,b) => b[1]-a[1])[0]?.[0];
+
+      const themes = cards.map(c => extractKeywords(c.meaning)).join('; ');
+
+      let framing = '';
+      if (cards.length === 3) {
+        framing = 'This spread reads like a progression: what shaped the situation, what is active now, and where things may move next.';
+      } else if (cards.length === 5) {
+        framing = 'This spread gives a broader snapshot of the situation, including challenge, support, and a likely direction if current energy continues.';
+      }
+
+      const arcanaLine = dominantArcana
+        ? `A strong ${dominantArcana} tone appears in this reading, highlighting ${arcanaInterpretation(dominantArcana)}.`
+        : '';
+
+      return `${framing} ${arcanaLine} Combined message: ${combineCardNarrative(cards)} Key themes across the cards include ${themes}.`;
+    }
+
+    function extractKeywords(text) {
+      // lightweight keyword-ish extraction for a human-friendly phrase
+      const stop = new Set(['and','the','a','an','of','to','in','with','through','what','is']);
+      const words = text
+        .toLowerCase()
+        .replace(/[^a-z\s-]/g, '')
+        .split(/\s+/)
+        .filter(w => w && !stop.has(w) && w.length > 2);
+      return [...new Set(words)].slice(0, 4).join(', ');
+    }
+
+    function arcanaInterpretation(a) {
+      switch (a) {
+        case 'Major': return 'big-picture life lessons and important inner shifts';
+        case 'Wands': return 'motivation, action, and creative momentum';
+        case 'Cups': return 'emotions, connection, and intuition';
+        case 'Swords': return 'thinking, truth, and communication';
+        case 'Pentacles': return 'practical matters, work, and stability';
+        default: return 'a recurring theme';
+      }
+    }
+
+    function combineCardNarrative(cards) {
+      if (cards.length === 1) return cards[0].meaning;
+      const first = cards[0], last = cards[cards.length - 1];
+      return `The reading begins with ${first.name.toLowerCase()} (${first.meaning.toLowerCase()}) and moves toward ${last.name.toLowerCase()} (${last.meaning.toLowerCase()}).`;
+    }
+
+    function renderStatus() {
+      const remainingInDeck = Math.max(0, TAROT_DECK.length - appState.spreadSize);
+      const revealed = appState.revealedCount;
+      const total = appState.spreadSize;
+      const active = appState.readingActive;
+
+      let text = '';
+      if (appState.shuffleState === 'shuffling') {
+        text = `🔀 <strong>Shuffling the 78-card deck…</strong> Preparing your reading.`;
+      } else if (appState.shuffleState === 'done') {
+        text = `✅ <strong>Shuffle complete.</strong> Your ${total}-card reading is ready to reveal.`;
+      } else if (!active) {
+        text = `Deck ready: <strong>${TAROT_DECK.length}</strong> tarot cards. Choose options and tap <strong>Shuffle Deck & Start Reading</strong>.`;
+      } else {
+        text = `Reading active • Spread: <strong>${total}</strong> card${total > 1 ? 's' : ''} • Revealed: <strong>${revealed}/${total}</strong> • Unused in deck: <strong>${remainingInDeck}</strong>`;
+      }
+      statusLine.innerHTML = text;
+    }
+
+    function renderControls() {
+      const active = appState.readingActive;
+      const done = appState.revealedCount >= appState.spreadSize;
+      const isShuffling = appState.shuffleState === 'shuffling';
+
+      newReadingBtn.disabled = isShuffling;
+      drawNextBtn.disabled = !active || done || isShuffling;
+      revealAllBtn.disabled = !active || done || isShuffling;
+      resetBtn.disabled = isShuffling;
+
+      newReadingBtn.classList.toggle('shuffling', isShuffling);
+      if (isShuffling) {
+        newReadingBtn.textContent = '🔀 Shuffling Deck…';
+      } else {
+        newReadingBtn.textContent = '🔀 Shuffle Deck & Start Reading';
+      }
+
+      modeHint.textContent = appState.revealMode === 'step'
+        ? '1-by-1 mode is active. Tap the next facedown card (or use “Draw Next Card”). The deck is shuffled only when you start a new reading.'
+        : 'Reveal All mode is active. Tap “Reveal Remaining” to unveil all selected cards, or tap cards manually. The deck is shuffled only when you start a new reading.';
+    }
+
+    function renderCards() {
+      cardsGrid.innerHTML = '';
+      const size = appState.spreadSize;
+      const labels = spreadPositionLabels[size] || [];
+
+      for (let i = 0; i < size; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+
+        const label = document.createElement('div');
+        label.className = 'slot-label';
+        label.textContent = labels[i] || `Card ${i + 1}`;
+
+        const isRevealed = appState.readingActive && i < appState.revealedCount;
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `card ${isRevealed ? 'face' : 'back'} ${!appState.readingActive ? 'disabled' : ''}`;
+        card.setAttribute('aria-label', isRevealed ? `Revealed card ${i + 1}` : `Facedown card ${i + 1}`);
+
+        if (!appState.readingActive) {
+          card.innerHTML = `
+            <div class="card-back-inner">
+              <div class="sigil"><div class="moon">☾</div></div>
+              <div class="deck-count">Tap “Start New Reading”</div>
+            </div>`;
+        } else if (!isRevealed) {
+          const canTap = appState.revealMode === 'bulk' || i === appState.revealedCount;
+          card.innerHTML = `
+            <div class="card-back-inner">
+              <div class="sigil"><div class="moon">✦</div></div>
+              <div class="deck-count">${canTap ? 'Tap to reveal' : 'Reveal in order'}</div>
+            </div>`;
+          if (!canTap) card.style.opacity = '0.78';
+        } else {
+          const c = appState.selectedCards[i];
+          card.innerHTML = `
+            <div class="card-face-inner">
+              <div class="chip-row">
+                <span class="chip">${c.arcana}</span>
+                <span class="chip">#${i + 1}</span>
+              </div>
+              <div class="card-title">${escapeHtml(c.name)}</div>
+              <div class="symbol-box" aria-hidden="true">${c.emoji || '🔮'}</div>
+              <div class="mini-meaning">${escapeHtml(c.meaning)}</div>
+            </div>`;
+        }
+
+        card.addEventListener('click', () => {
+          if (!appState.readingActive) return;
+          if (isRevealed) return;
+          revealCard(i);
+        });
+
+        slot.append(label, card);
+        cardsGrid.append(slot);
+      }
+    }
+
+    function renderPickedListAndSummary() {
+      const revealed = getRevealedCards();
+      pickedList.innerHTML = '';
+      emptyPicked.style.display = revealed.length ? 'none' : 'block';
+
+      const labels = spreadPositionLabels[appState.spreadSize] || [];
+      revealed.forEach((card, idx) => {
+        const item = document.createElement('div');
+        item.className = 'picked-item';
+        item.innerHTML = `
+          <div class="name">
+            <span>${card.emoji || '🔮'}</span>
+            <span>${escapeHtml(card.name)}</span>
+            <span class="pill">${escapeHtml(labels[idx] || `Card ${idx + 1}`)}</span>
+            <span class="pill">${escapeHtml(card.arcana)}</span>
+          </div>
+          <div class="meaning">${escapeHtml(card.meaning)}</div>
+        `;
+        pickedList.appendChild(item);
+      });
+
+      summaryText.textContent = summarizeReading(revealed);
+    }
+
+    function renderAll() {
+      setActiveButtonGroup(spreadButtons, 'spread', appState.spreadSize);
+      setActiveButtonGroup(modeButtons, 'mode', appState.revealMode);
+      renderControls();
+      renderStatus();
+      renderCards();
+      renderPickedListAndSummary();
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // --- Event wiring ---
+    spreadButtons.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-spread]');
+      if (!btn) return;
+      const nextSpread = Number(btn.dataset.spread);
+      if (![1, 3, 5].includes(nextSpread)) return;
+      appState.spreadSize = nextSpread;
+      // Auto reset current reading to avoid mismatch
+      resetReading();
+    });
+
+    modeButtons.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-mode]');
+      if (!btn) return;
+      const nextMode = btn.dataset.mode;
+      if (!['step', 'bulk'].includes(nextMode)) return;
+      appState.revealMode = nextMode;
+      renderAll();
+    });
+
+    newReadingBtn.addEventListener('click', startNewReading);
+    drawNextBtn.addEventListener('click', drawNext);
+    revealAllBtn.addEventListener('click', revealRemaining);
+    resetBtn.addEventListener('click', resetReading);
+
+    // --- Initial render ---
+    renderAll();
+  </script>
+</body>
+</html>
